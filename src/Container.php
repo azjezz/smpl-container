@@ -12,6 +12,18 @@ use Smpl\Container\Resolvers\MethodResolver;
 
 class Container
 {
+    private static self $instance;
+
+    public static function instance(): static
+    {
+        if (! isset(self::$instance)) {
+            self::$instance = new static;
+            self::$instance->bind(__CLASS__, fn() => self::instance());
+        }
+
+        return self::$instance;
+    }
+
     /**
      * @var array<class-string, \Smpl\Container\Provider>
      */
