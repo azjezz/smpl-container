@@ -1,0 +1,212 @@
+<?php
+
+namespace Smpl\Container\Resolvers;
+
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionNamedType;
+use ReflectionParameter;
+use ReflectionProperty;
+use ReflectionType;
+use ReflectionUnionType;
+use Smpl\Container\Container;
+use Smpl\Container\Contracts\Resolver;
+
+abstract class BaseResolver implements Resolver
+{
+    private Container $container;
+
+    protected function callMethod(?object $instance, ReflectionMethod $method, array &$arguments = [])
+    {
+        return $method->invokeArgs($instance, $this->resolveMethodArguments($method, $arguments));
+    }
+
+    protected function checkType(?ReflectionType $type, mixed $value, bool $allowNull = true): bool
+    {
+        if ($type === null) {
+            return true;
+        }
+
+        if ($type instanceof ReflectionNamedType) {
+            if ($allowNull && $value === null && $type->allowsNull()) {
+                return true;
+            }
+
+            return $type->getName() === get_debug_type($value);
+        }
+
+        if ($type instanceof ReflectionUnionType) {
+            foreach ($type->getTypes() as $unionType) {
+                if ($this->checkType($unionType, $value, false)) {
+                    return true;
+                }
+            }
+
+            if ($allowNull && $value === null && $type->allowsNull()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function clearArgument(ReflectionParameter|ReflectionProperty $reflectedComponent, array &$arguments): void
+    {
+        // If there was a parameter found based on name we're going to want to remove that from
+        // the arguments array so that it isn't used for something else.
+        if (isset($arguments[$reflectedComponent->getName()])) {
+            unset($arguments[$reflectedComponent->getName()]);
+        }
+
+        // If it was found based on position we're going to want to remove that too.
+        if (method_exists($reflectedComponent, 'getPosition') && isset($arguments[$reflectedComponent->getPosition()])) {
+            unset($arguments[$reflectedComponent->getPosition()]);
+        }
+    }
+
+    protected function getContainer(): Container
+    {
+        if (! isset($this->container)) {
+            // TODO: Throw an exception
+        }
+
+        return $this->container;
+    }
+
+    public function setContainer(Container $container): void
+    {
+        $this->container = $container;
+    }
+
+    protected function getPropertyValue(ReflectionProperty $property, array &$arguments = [])
+    {
+        $resolved = null;
+
+        if (! empty($arguments)) {
+            $argument = $arguments[$property->getName()] ?? null;
+
+            if ($argument !== null) {
+                $propertyType = $property->getType();
+
+                if (is_array($argument) && $propertyType !== null && class_exists($propertyType->getName())) {
+                    // If the parameter type is actually a class but the argument we have is an array, it means
+                    // that we don't have the argument, but the arguments for resolving the parameter.
+                    $resolved = $this->resolvedTypedValue($propertyType, $arguments);
+                    $this->clearArgument($property, $arguments);
+                } else if ($this->checkType($propertyType, $argument)) {
+                    $this->clearArgument($property, $arguments);
+
+                    return $argument;
+                }
+
+                // TODO: Throw an exception for wrong type
+            }
+        }
+
+        if ($resolved === null) {
+            $resolved = $this->resolvedTypedValue($property->getType());
+        }
+
+        if ($resolved === null) {
+            $resolved = $property->hasDefaultValue() ? $property->getDefaultValue() : null;
+        }
+
+        return $resolved;
+    }
+
+    protected function newInstance(ReflectionClass $reflectionClass, array &$arguments = [], bool $useConstructor = true): object
+    {
+        if (! $useConstructor) {
+            return $reflectionClass->newInstanceWithoutConstructor();
+        }
+
+        $constructor = $reflectionClass->getConstructor();
+
+        if ($constructor === null || $constructor->getNumberOfParameters() === 0) {
+            return $reflectionClass->newInstance();
+        }
+
+        $arguments = $this->resolveMethodArguments($constructor, $arguments);
+
+        return $reflectionClass->newInstanceArgs($arguments);
+    }
+
+    protected function resolveMethodArguments(ReflectionMethod $method, array &$arguments = []): array
+    {
+        $parameters = $method->getParameters();
+
+        if (empty($parameters)) {
+            return [];
+        }
+
+        $methodArguments = [];
+
+        foreach ($parameters as $parameter) {
+            $argument = $arguments[$parameter->getName()] ?? $arguments[$parameter->getPosition()] ?? null;
+            $resolved = null;
+
+            if ($argument !== null) {
+                $parameterType = $parameter->getType();
+
+                if (is_array($argument) && $parameterType !== null && class_exists($parameterType->getName())) {
+                    // If the parameter type is actually a class but the argument we have is an array, it means
+                    // that we don't have the argument, but the arguments for resolving the parameter.
+                    $resolved = $this->resolvedTypedValue($parameterType, $arguments);
+                    $this->clearArgument($parameter, $arguments);
+                } else if ($this->checkType($parameterType, $argument)) {
+                    $methodArguments[$parameter->getName()] = $argument;
+                    $this->clearArgument($parameter, $arguments);
+
+                    continue;
+                }
+
+                // TODO: Throw an exception for wrong type
+            }
+
+            if ($resolved === null) {
+                $resolved = $this->resolvedTypedValue($parameter->getType());
+            }
+
+            if ($resolved === null) {
+                $resolved = $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null;
+            }
+
+            $methodArguments[$parameter->getName()] = $resolved;
+        }
+
+        return $methodArguments;
+    }
+
+    protected function resolvedTypedValue(?ReflectionType $type, array $arguments = [])
+    {
+        if ($type === null) {
+            return null;
+        }
+
+        if ($type instanceof ReflectionNamedType) {
+            if (class_exists($type->getName())) {
+                $resolved = $this->getContainer()->make($type->getName(), $arguments);
+
+                if ($resolved === null && $type->allowsNull()) {
+                    return null;
+                }
+
+                return $resolved;
+            }
+
+            return null;
+        }
+
+        if ($type instanceof ReflectionUnionType) {
+            foreach ($type->getTypes() as $unionType) {
+                $resolved = $this->resolvedTypedValue($unionType, $arguments);
+
+                if ($resolved !== null) {
+                    return $resolved;
+                }
+            }
+        }
+
+        return null;
+    }
+}
