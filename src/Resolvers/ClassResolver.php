@@ -6,6 +6,7 @@ use Psl\Dict;
 use ReflectionClass;
 use ReflectionProperty;
 use Smpl\Container\Attributes\Inject;
+use Smpl\Container\Exceptions\InvalidArgument;
 
 class ClassResolver extends BaseResolver
 {
@@ -60,6 +61,16 @@ class ClassResolver extends BaseResolver
             $constructorArguments = [];
             $instance             = $this->newInstance($reflection, $constructorArguments, false);
             $constructor          = $reflection->getConstructor();
+            $requiredArguments    = $constructor === null ? count($propertyDependencies) : count($propertyDependencies) + $constructor->getNumberOfParameters();
+
+            if (count($arguments) !== $requiredArguments && ! $this->getContainer()->shouldAutowire()) {
+                throw new InvalidArgument(sprintf(
+                    'Resolving class %s requires %s arguments, %s provided',
+                    $this->className,
+                    $requiredArguments,
+                    count($arguments)
+                ));
+            }
 
             $this->injectPropertyDependencies($instance, $propertyDependencies, $arguments);
 

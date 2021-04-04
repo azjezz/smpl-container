@@ -128,6 +128,15 @@ abstract class BaseResolver implements Resolver
             return $reflectionClass->newInstance();
         }
 
+        if (! $this->getContainer()->shouldAutowire() && count($arguments) !== $constructor->getNumberOfParameters()) {
+            throw new InvalidArgument(sprintf(
+                'The %s constructor has %s parameters, %s arguments provided',
+                $reflectionClass->getName(),
+                $constructor->getNumberOfParameters(),
+                count($arguments)
+            ));
+        }
+
         $arguments = $this->resolveMethodArguments($constructor, $arguments);
 
         return $reflectionClass->newInstanceArgs($arguments);
@@ -139,6 +148,15 @@ abstract class BaseResolver implements Resolver
 
         if (empty($parameters)) {
             return [];
+        }
+
+        if (! $this->getContainer()->shouldAutowire() && count($arguments) !== $method->getNumberOfParameters()) {
+            throw new InvalidArgument(sprintf(
+                'The method %s has %s parameters, %s arguments provided',
+                $method->getName(),
+                $method->getNumberOfParameters(),
+                count($arguments)
+            ));
         }
 
         $methodArguments = [];
