@@ -6,6 +6,7 @@ use Closure;
 use ReflectionClass;
 use Smpl\Container\Attributes\ProvidedBy;
 use Smpl\Container\Contracts\Resolver;
+use Smpl\Container\Exceptions\InvalidResolver;
 use Smpl\Container\Resolvers\ClassResolver;
 use Smpl\Container\Resolvers\ClosureResolver;
 use Smpl\Container\Resolvers\MethodResolver;
@@ -73,7 +74,7 @@ class Container
     private function createMethodResolver(string $class, string $method, bool $shared): MethodResolver
     {
         if (! method_exists($class, $method)) {
-            // TODO: Throw an exception
+            throw new InvalidResolver(sprintf('Cannot create a resolver for %s::%s as the method does not exist', $class, $method));
         }
 
         return new MethodResolver($class, $method, $shared);
@@ -97,7 +98,9 @@ class Container
 
         if (is_array($concrete)) {
             if (count($concrete) !== 2) {
-                // TODO: Throw an exception
+                throw new InvalidResolver(
+                    sprintf('Provided concrete array is invalid as a resolver, expected exactly 2 values, %s provided', count($concrete))
+                );
             }
 
             [$class, $method] = $concrete;

@@ -11,6 +11,7 @@ use ReflectionUnionType;
 use Smpl\Container\Attributes\Resolves;
 use Smpl\Container\Attributes\Shared;
 use Smpl\Container\Exceptions\InvalidProvider;
+use Smpl\Container\Exceptions\InvalidResolver;
 
 class Provider
 {
@@ -88,7 +89,11 @@ class Provider
 
         if (empty($provides)) {
             if (! $providingMethod->hasReturnType()) {
-                // TODO: Throw an exception
+                throw new InvalidProvider(sprintf(
+                    'Provider %s::%s does not specify what it provides',
+                    $this->provider,
+                    $providingMethod->getName()
+                ));
             }
 
             $returnType = $providingMethod->getReturnType();
