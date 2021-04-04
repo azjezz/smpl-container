@@ -67,7 +67,8 @@ abstract class BaseResolver implements Resolver
     protected function getContainer(): Container
     {
         if (! isset($this->container)) {
-            // TODO: Throw an exception
+            // If there's no container we'll set the instance using the singleton methods
+            $this->setContainer(Container::instance());
         }
 
         return $this->container;
