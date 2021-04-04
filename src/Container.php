@@ -4,6 +4,7 @@ namespace Smpl\Container;
 
 use Closure;
 use ReflectionClass;
+use ReflectionException;
 use Smpl\Container\Attributes\ProvidedBy;
 use Smpl\Container\Contracts\Resolver;
 use Smpl\Container\Exceptions\InvalidResolver;
@@ -11,7 +12,7 @@ use Smpl\Container\Resolvers\ClassResolver;
 use Smpl\Container\Resolvers\ClosureResolver;
 use Smpl\Container\Resolvers\MethodResolver;
 
-class Container
+class Container implements Contracts\Container
 {
     private static self $instance;
 
@@ -51,7 +52,7 @@ class Container
         return $this;
     }
 
-    public function bind(string $abstract, Closure|string|array|null $concrete = null, bool $shared = false): static
+    public function bind(string $abstract, string|array|null|object $concrete = null, bool $shared = false): static
     {
         $concrete ??= $abstract;
         $resolver = $this->createResolver($concrete, $shared);
@@ -61,6 +62,20 @@ class Container
         }
 
         return $this;
+    }
+
+    public function call(string $class, string $method, array $arguments = [], bool $fresh = false, bool $shared = false): mixed
+    {
+        // TODO: Handle shared method calls
+        $resolver = $this->createMethodResolver($class, $method, $shared);
+
+        if ($resolver !== null) {
+            $resolver->setContainer($this);
+
+            return $resolver->resolve($arguments);
+        }
+
+        return null;
     }
 
     private function createClassResolver(string $class, bool $shared): ClassResolver
@@ -82,14 +97,22 @@ class Container
         return new MethodResolver($class, $method, $shared);
     }
 
-    private function createResolver(Closure|string|array $concrete, bool $shared): ?Resolver
+    private function createResolver(object|string|array $concrete, bool $shared): ?Resolver
     {
-        if (is_string($concrete) && class_exists($concrete)) {
-            return $this->processClassProvider($concrete) ?? $this->createClassResolver($concrete, $shared);
+        if ($concrete instanceof Resolver) {
+            return $concrete;
         }
 
         if ($concrete instanceof Closure) {
             return $this->createClosureResolver($concrete, $shared);
+        }
+
+        if (is_object($concrete)) {
+            // TODO: Add object resolver
+        }
+
+        if (is_string($concrete) && class_exists($concrete)) {
+            return $this->processClassProvider($concrete) ?? $this->createClassResolver($concrete, $shared);
         }
 
         if (is_array($concrete)) {
@@ -158,7 +181,7 @@ class Container
                 $providedBy = $attribute->newInstance();
                 return $this->provider($providedBy->getClass())->resolver($concrete);
             }
-        } catch (\ReflectionException $e) {
+        } catch (ReflectionException $e) {
         }
 
         return null;
