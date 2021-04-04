@@ -84,14 +84,8 @@ class Container
 
     private function createResolver(Closure|string|array $concrete, bool $shared): ?Resolver
     {
-        if (is_string($concrete)) {
-            if (function_exists($concrete)) {
-                // TODO: Return function exists
-            }
-
-            if (class_exists($concrete)) {
-                return $this->processClassProvider($concrete) ?? $this->createClassResolver($concrete, $shared);
-            }
+        if (is_string($concrete) && class_exists($concrete)) {
+            return $this->processClassProvider($concrete) ?? $this->createClassResolver($concrete, $shared);
         }
 
         if ($concrete instanceof Closure) {
