@@ -4,7 +4,7 @@ A simple, modern PHP container library.
 
 ## Installation
 
-Install view composer using the following command
+Install via composer using the following command
 
 ```
 composer require smpl/container
@@ -12,17 +12,8 @@ composer require smpl/container
 
 ## Usage
 
-### Getting the container
-
-You can create a new container using the standard object creation methods.
-
-```php
-use Smpl\Container\Container;
-
-$container = new Container();
-```
-
-Though it is recommended that you use the `instance()` singleton method.
+To use the SMPL container you must first get an instance of `Smpl\Container\Container`. This class is a singleton, so
+you can get instance like so.
 
 ```php
 use Smpl\Container\Container;
@@ -30,152 +21,149 @@ use Smpl\Container\Container;
 $container = Container::instance();
 ```
 
-This method will ensure that you always receive the same instance of the container, as well as making sure it registers
-itself with itself.
+### Autowiring
 
-### Bindings
-
-There are five types of bindings accepted by the container, all bound by calling the `bind()` method.
-
-The signature of this method is:
-
-```php
-public function bind(string $abstract, Closure|string|array|null $concrete = null, bool $shared = false): static
-```
-
-The parameters are as follows.
-
-| Parameter | Description |
-| --- | --- |
-|`abstract`| The class or interface the binding is for |
-|`concrete`| The binding concrete, used to resolve the binding. Can be null to use `abstract` in its place|
-|`shared`|If set to `true`, the binding will only be resolved once, with each subsequent call returning the same value.|
-
-#### Binding a class
-
-You can create a class binding in one of two ways, either by providing a classname or `null` for the `concrete`
-parameter.
+Autowiring is enabled by default, so you can start using the container right away.
 
 ```php
 use Smpl\Container\Container;
-use Smpl\Container\Tests\Fixtures\ADependency;
+use Smpl\Container\Tests\Fixtures\SomeClass;
 
-Container::instance()->bind(ADependency::class);
-Container::instance()->bind(ADependency::class, ADependency::class);
+$container = Container::instance();
+$someClass = $container->make(SomeClass::class);
 ```
 
-#### Binding a method
-
-You can create a method binding by providing an array of `[class, method]` as the `concrete` parameter.
+To disable autowiring simply call the `disableAutowiring()` method. To re-enable it, call `enabledAutowiring()`.
 
 ```php
 use Smpl\Container\Container;
-use Smpl\Container\Tests\Fixtures\ADependency;
-use Smpl\Container\Tests\Fixtures\DependencyProvider;
 
-Container::instance()->bind(ADependency::class, [DependencyProvider::class, 'providerADependency']);
+$container = Container::instance();
+
+// Disable the autowiring
+$container->disableAutowiring();
+
+// Enable to autowiring
+$container->enableAutowiring();
 ```
 
-#### Binding a closure
+The status of this is per instance of the container, so if you're using multiple instances you will need to call the
+method on each of those in turn.
 
-#### Binding a function
+### Custom bindings
 
-#### Binding an object
+If you have a particular depdenency that can't be automatically created, you may tell the container how to do so using
+the `bind` command.
+
+```php
+use Smpl\Container\Container;
+use Smpl\Container\Tests\Fixtures\ADependency;use Smpl\Container\Tests\Fixtures\SomeClass;
+
+$container = Container::instance();
+$container->bind(ADependency::class, fn() => new ADependency(false), false);
+```
+
+The first parameter (`abstract`) is always the class you're binding, whether it's a concrete classname or an interface.
+
+The second parameter (`concrete`) is the class to provide, or a way to get the class. There are currently three types of
+support resolver.
+
+The third parameter (`shared`) is whether a binding should be shared. Shared bindings are only resolved once, returning
+the same instance for each successive request.
+
+1. A class resolver. In this instance a class name is provided, and the container will automatically handle its
+   dependencies.
+2. A method resolver. For this an array of `[classname, methodname]` should be provided. If the method is not static the
+   class will be resolved using a class resolver. Alternatively you may provide an object instead of a class name here.
+3. A closure resolver. This is the same as the example above, using a provided closure to resolve the binding.
+
+### Property injection
+
+This container also supports injecting dependencies into properties before calling the constructor. To mark a property
+for injection simply use the `Inject` attribute.
+
+```php
+use Smpl\Container\Attributes\Inject;
+use Smpl\Container\Tests\Fixtures\ADependency;
+
+class MyClass {
+    #[Inject]
+    protected ADependency $myProperty;
+}
+```
+
+To use this injection you must be using typed properties. The container will use the type the same way it does for
+method parameters.
 
 ### Providers
 
-Providers are classes that provide binding resolutions. All that is required for a class to be a provider, is for it to
-have at least one method using the following attribute.
+Rather than manually adding custom bindings to the container you can create a provider to contain them.
 
-```
-Smpl\Container\Attributes\Resolves
-```
-
-The resolver method should return an instance of the dependency it provides, and specify its type as either the methods
-return type, or as the argument for the attribute.
-
-```
-Smpl\Container\Attributes\Resolves
-```
-
-An example using the return type:
+Unlike most other containers, a SMPL container provider is simple, and requires no interfaces. Instead a provide is a
+class, with methods that are labelled with the `Resolves` attribute.
 
 ```php
-#[Resolves]
-public static function resolveADependency() : ADependency
+use Smpl\Container\Attributes\Resolves;
+use Smpl\Container\Attributes\Shared;
+use Smpl\Container\Tests\Fixtures\ADependency;
+use Smpl\Container\Tests\Fixtures\AnotherDependency;
+
+class DependencyProvider
 {
-    return new ADependency(false);
+    #[Resolves, Shared]
+    public static function provideADependency(): ADependency
+    {
+        return new ADependency(false);
+    }
+
+    #[Resolves]
+    public function provideAnotherDependency(): AnotherDependency
+    {
+        return new AnotherDependency(true, 'yes');
+    }
 }
 ```
 
-An example using the attribute argument:
+You can optionally add the `Shared` attribute to mark a binding as only needing to be resolved once. These methods
+should either have a return type which will be used the `abstract` for binding, or provide it in the `Resolves`
+attribute. If you add more than one type the first will be used as the primary binding, and all others will be added as
+aliases.
 
-```php
-#[Resolves(ADepdency::class)]
-public static function resolveADependency()
-{
-    return new ADependency(false);
-}
-```
+These methods use the method resolver approach, so you can in turn have dependencies injected.
 
-If all resolver methods are static, no new instance of the provider will be created. If either one or more methods are
-not static, or there is a constructor present, an instance of the provider will be created before first resolving a
-binding.
-
-These methods are called the same way as any other binding, so your resolver methods can have parameters to be injected
-automatically by the container.
-
-Providers are registered with the container in one of two ways.
-
-#### Manually registering a provider
-
-To manually register a provider you should call the `provider()` method with the provider class name.
+To register a provider you can simply called the `provider()` method on the container, with the provider class name.
 
 ```php
 use Smpl\Container\Container;
 use Smpl\Container\Tests\Fixtures\DependencyProvider;
 
-Container::instance()->provider(DependencyProvider::class);
+$container = Container::instance();
+$container->provider(DependencyProvider::class);
 ```
 
-#### Deferring registration
+If a provider does not have a constructor, and all the resolution methods are static, no new instance of it will be
+created.
 
-To defer registration of a provider you can add the following attribute to the classes that your provider provides.
-
-```
-Smpl\Container\Attributes\ProvidedBy
-```
-
-This attribute accepts one argument, `class`, which should be the fully qualified name of the provider class.
-
-Once an instance of a class using this attribute is requested, the provider will be automatically registered, including
-all other bindings contained within it.
+If you wish to defer the registration of a provider you may add the `ProvidedBy` attribute to a class, which will point
+the container to the provider when an attempt is made to resolve the dependency.
 
 ```php
-use Smpl\Container\Container;
-use Smpl\Container\Tests\Fixtures\DependencyProvider;
 use Smpl\Container\Attributes\ProvidedBy;
+use Smpl\Container\Tests\Fixtures\DependencyProvider;
 
-#[ProvidedBy(DependencyProvider::class)]
-class MyClass {
+#[ProvidedBy(class: DependencyProvider::class)]
+class ADependency
+{
+    private bool $foo;
+
+    public function __construct(bool $foo)
+    {
+        $this->foo = $foo;
+    }
+
+    public function isFoo(): bool
+    {
+        return $this->foo;
+    }
 }
-
-$myClass = Container::instance()->make(MyClass::class);
-```
-
-#### Aliasing bindings
-
-To alias a binding you can provide the aliases as arguments on the `Resolves`
-attribute. The `classes` parameter for the attribute is a variable parameter of type `string`.
-
-When using aliases the first value on the attribute will be used as the core binding that others are aliased to so you
-will need to specify the type in the attribute regardless of whether the method has a return type or not.
-
-#### Sharing bindings
-
-If you wish for a binding to only be resolved once, you can mark it as shared by using the following attribute on the
-resolver method:
-
-```
-Smpl\Container\Attributes\Shared
 ```
