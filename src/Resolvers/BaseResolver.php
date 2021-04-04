@@ -90,7 +90,7 @@ abstract class BaseResolver implements Resolver
             if ($argument !== null) {
                 $propertyType = $property->getType();
 
-                if (is_array($argument) && $propertyType !== null && class_exists($propertyType->getName())) {
+                if (is_array($argument) && $propertyType !== null && class_exists($propertyType->getName()) && $this->getContainer()->shouldAutowire()) {
                     // If the parameter type is actually a class but the argument we have is an array, it means
                     // that we don't have the argument, but the arguments for resolving the parameter.
                     $resolved = $this->resolvedTypedValue($propertyType, $arguments);
@@ -105,7 +105,7 @@ abstract class BaseResolver implements Resolver
             }
         }
 
-        if ($resolved === null) {
+        if ($resolved === null && $this->getContainer()->shouldAutowire()) {
             $resolved = $this->resolvedTypedValue($property->getType());
         }
 
@@ -150,7 +150,7 @@ abstract class BaseResolver implements Resolver
             if ($argument !== null) {
                 $parameterType = $parameter->getType();
 
-                if (is_array($argument) && $parameterType !== null && class_exists($parameterType->getName())) {
+                if (is_array($argument) && $parameterType !== null && class_exists($parameterType->getName()) && $this->getContainer()->shouldAutowire()) {
                     // If the parameter type is actually a class but the argument we have is an array, it means
                     // that we don't have the argument, but the arguments for resolving the parameter.
                     $resolved = $this->resolvedTypedValue($parameterType, $arguments);
@@ -165,7 +165,7 @@ abstract class BaseResolver implements Resolver
                 }
             }
 
-            if ($resolved === null) {
+            if ($resolved === null && $this->getContainer()->shouldAutowire()) {
                 $resolved = $this->resolvedTypedValue($parameter->getType());
             }
 

@@ -25,6 +25,8 @@ class Container
         return self::$instance;
     }
 
+    private bool $autowire = true;
+
     /**
      * @var array<class-string, \Smpl\Container\Provider>
      */
@@ -111,6 +113,20 @@ class Container
         return null;
     }
 
+    public function disableAutowiring(): static
+    {
+        $this->autowire = false;
+
+        return $this;
+    }
+
+    public function enableAutowiring(): static
+    {
+        $this->autowire = true;
+
+        return $this;
+    }
+
     public function hasBinding(string $abstract): bool
     {
         return isset($this->resolvers[$abstract]);
@@ -167,5 +183,10 @@ class Container
     public function resolver(string $abstract): ?Resolver
     {
         return $this->resolvers[$abstract] ?? null;
+    }
+
+    public function shouldAutowire(): bool
+    {
+        return $this->autowire;
     }
 }
