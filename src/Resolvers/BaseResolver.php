@@ -11,6 +11,7 @@ use ReflectionType;
 use ReflectionUnionType;
 use Smpl\Container\Container;
 use Smpl\Container\Contracts\Resolver;
+use Smpl\Container\Exceptions\InvalidArgument;
 
 abstract class BaseResolver implements Resolver
 {
@@ -98,9 +99,9 @@ abstract class BaseResolver implements Resolver
                     $this->clearArgument($property, $arguments);
 
                     return $argument;
+                } else {
+                    throw new InvalidArgument(sprintf('Invalid type provided for argument as property %s', $property->getName()));
                 }
-
-                // TODO: Throw an exception for wrong type
             }
         }
 
@@ -159,9 +160,9 @@ abstract class BaseResolver implements Resolver
                     $this->clearArgument($parameter, $arguments);
 
                     continue;
+                } else {
+                    throw new InvalidArgument(sprintf('Invalid type provided for parameter %s', $parameter->getName()));
                 }
-
-                // TODO: Throw an exception for wrong type
             }
 
             if ($resolved === null) {
