@@ -2,6 +2,8 @@
 
 namespace Smpl\Container\Resolvers;
 
+use Psl\Str;
+use Psl\Iter;
 use Psl\Dict;
 use ReflectionClass;
 use ReflectionProperty;
@@ -26,7 +28,7 @@ class ClassResolver extends BaseResolver
     {
         return Dict\filter(
             $reflection->getProperties(),
-            fn(ReflectionProperty $property) => ! empty($property->getAttributes(Inject::class)) && ! $property->isStatic()
+            fn(ReflectionProperty $property) => ! Iter\is_empty($property->getAttributes(Inject::class)) && ! $property->isStatic()
         );
     }
 
@@ -55,20 +57,20 @@ class ClassResolver extends BaseResolver
         $reflection           = new ReflectionClass($this->className);
         $propertyDependencies = $this->collectPropertyDependencies($reflection);
 
-        if (empty($propertyDependencies)) {
+        if (Iter\is_empty($propertyDependencies)) {
             $instance = $this->newInstance($reflection, $arguments);
         } else {
             $constructorArguments = [];
             $instance             = $this->newInstance($reflection, $constructorArguments, false);
             $constructor          = $reflection->getConstructor();
-            $requiredArguments    = $constructor === null ? count($propertyDependencies) : count($propertyDependencies) + $constructor->getNumberOfParameters();
+            $requiredArguments    = $constructor === null ? Iter\count($propertyDependencies) : Iter\count($propertyDependencies) + $constructor->getNumberOfParameters();
 
-            if (count($arguments) !== $requiredArguments && ! $this->getContainer()->shouldAutowire()) {
-                throw new InvalidArgument(sprintf(
+            if (($count = Iter\count($arguments)) !== $requiredArguments && ! $this->getContainer()->shouldAutowire()) {
+                throw new InvalidArgument(Str\format(
                     'Resolving class %s requires %s arguments, %s provided',
                     $this->className,
                     $requiredArguments,
-                    count($arguments)
+                    $count
                 ));
             }
 

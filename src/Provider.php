@@ -2,7 +2,11 @@
 
 namespace Smpl\Container;
 
+use Psl\Str;
+use Psl\Iter;
 use Psl\Dict;
+use Psl\Vec;
+use Psl\Class;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -11,7 +15,6 @@ use ReflectionUnionType;
 use Smpl\Container\Attributes\Resolves;
 use Smpl\Container\Attributes\Shared;
 use Smpl\Container\Exceptions\InvalidProvider;
-use Smpl\Container\Exceptions\InvalidResolver;
 
 class Provider
 {
@@ -51,10 +54,12 @@ class Provider
         }
 
         foreach ($this->provides as $method => $abstracts) {
-            $abstract = array_shift($abstracts);
+            /** @var string $abstract */
+            $abstract = Iter\first($abstracts);
+            $aliases = Vec\values(Dict\drop($abstracts, 1));
 
-            $container->bind($abstract, [$this->provider, $method], in_array($method, $this->sharedProviders, true))
-                      ->alias($abstract, ...$abstracts);
+            $container->bind($abstract, [$this->provider, $method], Iter\contains($this->sharedProviders, $method))
+                      ->alias($abstract, ...$aliases);
         }
     }
 
@@ -87,9 +92,9 @@ class Provider
             $this->requiresInstance = true;
         }
 
-        if (empty($provides)) {
+        if (Iter\is_empty($provides)) {
             if (! $providingMethod->hasReturnType()) {
-                throw new InvalidProvider(sprintf(
+                throw new InvalidProvider(Str\format(
                     'Provider %s::%s does not specify what it provides',
                     $this->provider,
                     $providingMethod->getName()
@@ -99,14 +104,14 @@ class Provider
             $returnType = $providingMethod->getReturnType();
 
             if ($returnType instanceof ReflectionUnionType) {
-                $provides = Dict\map($returnType->getTypes(), fn(ReflectionNamedType $type) => $type->getName());
+                $provides = Dict\map($returnType->getTypes(), static fn(ReflectionNamedType $type) => $type->getName());
             } else {
                 $provides = [$returnType->getName()];
             }
         }
 
-        if (empty($provides)) {
-            throw new InvalidProvider(sprintf(
+        if (Iter\is_empty($provides)) {
+            throw new InvalidProvider(Str\format(
                 'Provider %s::%s does not specify what it provides',
                 $this->provider,
                 $providingMethod->getName()
@@ -115,7 +120,7 @@ class Provider
 
         $this->provides[$providingMethod->getShortName()] = $provides;
 
-        if (! empty($providingMethod->getAttributes(Shared::class))) {
+        if (! Iter\is_empty($providingMethod->getAttributes(Shared::class))) {
             $this->sharedProviders[] = $providingMethod->getShortName();
         }
     }
@@ -124,11 +129,11 @@ class Provider
     {
         $providingMethods = Dict\filter(
             $this->reflect()->getMethods(ReflectionMethod::IS_PUBLIC),
-            fn(ReflectionMethod $method) => ! empty($method->getAttributes(Resolves::class))
+            static fn(ReflectionMethod $method) => ! Iter\is_empty($method->getAttributes(Resolves::class))
         );
 
-        if (empty($providingMethods)) {
-            throw new InvalidProvider(sprintf('Provider %s provides nothing', $this->provider));
+        if (Iter\is_empty($providingMethods)) {
+            throw new InvalidProvider(Str\format('Provider %s provides nothing', $this->provider));
         }
 
         foreach ($providingMethods as $providingMethod) {
@@ -154,8 +159,8 @@ class Provider
      */
     private function validateProvider(): void
     {
-        if (! class_exists($this->provider)) {
-            throw new InvalidProvider(sprintf('Invalid provider class %s', $this->provider));
+        if (!Class\exists($this->provider)) {
+            throw new InvalidProvider(Str\format('Invalid provider class %s', $this->provider));
         }
     }
 }

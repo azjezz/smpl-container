@@ -2,6 +2,10 @@
 
 namespace Smpl\Container\Resolvers;
 
+use Psl\Class;
+use Psl\Iter;
+use Psl\Str;
+use Psl\Type;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
@@ -60,7 +64,7 @@ abstract class BaseResolver implements Resolver
         }
 
         // If it was found based on position we're going to want to remove that too.
-        if (method_exists($reflectedComponent, 'getPosition') && isset($arguments[$reflectedComponent->getPosition()])) {
+        if (Class\has_method($reflectedComponent::class, 'getPosition') && isset($arguments[$reflectedComponent->getPosition()])) {
             unset($arguments[$reflectedComponent->getPosition()]);
         }
     }
@@ -84,7 +88,7 @@ abstract class BaseResolver implements Resolver
     {
         $resolved = null;
 
-        if (! empty($arguments)) {
+        if (!Iter\is_empty($arguments)) {
             $argument = $arguments[$property->getName()] ?? null;
 
             if ($argument !== null) {
@@ -128,12 +132,12 @@ abstract class BaseResolver implements Resolver
             return $reflectionClass->newInstance();
         }
 
-        if (! $this->getContainer()->shouldAutowire() && count($arguments) !== $constructor->getNumberOfParameters()) {
-            throw new InvalidArgument(sprintf(
+        if (! $this->getContainer()->shouldAutowire() && ($count = Iter\count($arguments)) !== $constructor->getNumberOfParameters()) {
+            throw new InvalidArgument(Str\format(
                 'The %s constructor has %s parameters, %s arguments provided',
                 $reflectionClass->getName(),
                 $constructor->getNumberOfParameters(),
-                count($arguments)
+                $count
             ));
         }
 
@@ -146,16 +150,16 @@ abstract class BaseResolver implements Resolver
     {
         $parameters = $method->getParameters();
 
-        if (empty($parameters)) {
+        if (Iter\is_empty($parameters)) {
             return [];
         }
 
-        if (! $this->getContainer()->shouldAutowire() && count($arguments) !== $method->getNumberOfParameters()) {
-            throw new InvalidArgument(sprintf(
+        if (! $this->getContainer()->shouldAutowire() && ($count = Iter\count($arguments)) !== $method->getNumberOfParameters()) {
+            throw new InvalidArgument(Str\format(
                 'The method %s has %s parameters, %s arguments provided',
                 $method->getName(),
                 $method->getNumberOfParameters(),
-                count($arguments)
+                $count
             ));
         }
 
@@ -168,7 +172,7 @@ abstract class BaseResolver implements Resolver
             if ($argument !== null) {
                 $parameterType = $parameter->getType();
 
-                if (is_array($argument) && $parameterType !== null && class_exists($parameterType->getName()) && $this->getContainer()->shouldAutowire()) {
+                if ($parameterType !== null && Class\exists($parameterType->getName()) && $this->getContainer()->shouldAutowire() && Type\dict(Type\array_key(), Type\mixed())->matches($argument)) {
                     // If the parameter type is actually a class but the argument we have is an array, it means
                     // that we don't have the argument, but the arguments for resolving the parameter.
                     $resolved = $this->resolvedTypedValue($parameterType, $arguments);
@@ -179,7 +183,7 @@ abstract class BaseResolver implements Resolver
 
                     continue;
                 } else {
-                    throw new InvalidArgument(sprintf('Invalid type provided for parameter %s', $parameter->getName()));
+                    throw new InvalidArgument(Str\format('Invalid type provided for parameter %s', $parameter->getName()));
                 }
             }
 
@@ -204,7 +208,7 @@ abstract class BaseResolver implements Resolver
         }
 
         if ($type instanceof ReflectionNamedType) {
-            if (class_exists($type->getName())) {
+            if (Class\exists($type->getName())) {
                 $resolved = $this->getContainer()->make($type->getName(), $arguments);
 
                 if ($resolved === null && $type->allowsNull()) {

@@ -2,6 +2,9 @@
 
 namespace Smpl\Container;
 
+use Psl\Iter;
+use Psl\Class;
+use Psl\Type;
 use Closure;
 use ReflectionClass;
 use ReflectionException;
@@ -90,7 +93,7 @@ class Container implements Contracts\Container
 
     private function createMethodResolver(string $class, string $method, bool $shared): MethodResolver
     {
-        if (! method_exists($class, $method)) {
+        if (!Class\has_method($class, $method)) {
             throw new InvalidResolver(sprintf('Cannot create a resolver for %s::%s as the method does not exist', $class, $method));
         }
 
@@ -111,18 +114,13 @@ class Container implements Contracts\Container
             // TODO: Add object resolver
         }
 
-        if (is_string($concrete) && class_exists($concrete)) {
+        if (Type\non_empty_string()->matches($concrete) && Class\exists($concrete)) {
             return $this->processClassProvider($concrete) ?? $this->createClassResolver($concrete, $shared);
         }
-
-        if (is_array($concrete)) {
-            if (count($concrete) !== 2) {
-                throw new InvalidResolver(
-                    sprintf('Provided concrete array is invalid as a resolver, expected exactly 2 values, %s provided', count($concrete))
-                );
-            }
-
-            [$class, $method] = $concrete;
+        
+        $spec = Type\shape([Type\non_empty_string(), Type\non_empty_string()]);
+        if ($spec->matches($concrete)) {
+            [$class, $method] = $spec->coerce($concrete);
 
             return $this->createMethodResolver($class, $method, $shared);
         }
@@ -146,12 +144,12 @@ class Container implements Contracts\Container
 
     public function hasBinding(string $abstract): bool
     {
-        return isset($this->resolvers[$abstract]);
+        return Iter\contains_key($this->resolvers, $abstract);
     }
 
     public function hasProvider(string $providerClass): bool
     {
-        return isset($this->providers[$providerClass]);
+        return Iter\contains_key($this->providers, $providerClass);
     }
 
     public function make(string $class, array $arguments = [], bool $fresh = false, bool $shared = false)
@@ -175,13 +173,13 @@ class Container implements Contracts\Container
     {
         try {
             $reflection = new ReflectionClass($concrete);
-            $attribute  = $reflection->getAttributes(ProvidedBy::class)[0] ?? null;
+            $attribute  = Iter\first($reflection->getAttributes(ProvidedBy::class));
 
             if ($attribute !== null) {
                 $providedBy = $attribute->newInstance();
                 return $this->provider($providedBy->getClass())->resolver($concrete);
             }
-        } catch (ReflectionException $e) {
+        } catch (ReflectionException) {
         }
 
         return null;
